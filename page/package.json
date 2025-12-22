@@ -6,10 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:config": "node scripts/test-config.js"
   },
   "dependencies": {
+    "cloudinary": "^2.5.1",
+    "dotenv": "^17.2.3",
+    "mongodb": "^7.0.0",
+    "mongoose": "^8.9.3",
     "next": "16.1.0",
+    "next-cloudinary": "^6.17.5",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
