@@ -4,13 +4,22 @@
 
 import { useEffect, useState } from 'react';
 
+interface ProductImage {
+  url: string;
+  cloudinaryId: string;
+}
+
 interface Product {
   _id: string;
   title: string;
   price: number;
   description?: string;
-  imageUrl?: string;
-  cloudinaryId?: string;
+  images: ProductImage[];
+  category?: {
+    _id: string;
+    name: string;
+    slug: string;
+  };
   createdAt: string;
 }
 
@@ -81,15 +90,31 @@ export default function ProductList() {
               key={product._id} 
               className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
             >
-              {product.imageUrl && (
-                <img 
-                  src={product.imageUrl} 
-                  alt={product.title}
-                  className="w-full h-48 object-cover rounded-md mb-3"
-                />
+              {/* Mostrar primera imagen con indicador de múltiples imágenes */}
+              {product.images && product.images.length > 0 && (
+                <div className="relative mb-3">
+                  <img 
+                    src={product.images[0].url} 
+                    alt={product.title}
+                    className="w-full h-48 object-cover rounded-md"
+                  />
+                  {product.images.length > 1 && (
+                    <span className="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                      +{product.images.length - 1} fotos
+                    </span>
+                  )}
+                </div>
               )}
               
               <h3 className="font-bold text-lg mb-1">{product.title}</h3>
+              
+              {/* Mostrar categoría si existe */}
+              {product.category && (
+                <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mb-2">
+                  {product.category.name}
+                </span>
+              )}
+              
               <p className="text-xl text-green-600 font-semibold mb-2">
                 ${product.price.toFixed(2)}
               </p>

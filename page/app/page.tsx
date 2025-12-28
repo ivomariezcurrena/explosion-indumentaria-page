@@ -116,7 +116,7 @@ export default function Home() {
 
           {/* Subtítulo */}
           <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto font-light leading-relaxed">
-            Toda la ropa qeu necesitas en un solo lugar{" "}
+            Toda la ropa que necesitas en un solo lugar{" "}
             <span className="text-white font-medium">estilo único</span> y{" "}
             <span className="text-white font-medium">calidad premium</span>
           </p>
