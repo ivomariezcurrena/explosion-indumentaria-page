@@ -3,18 +3,41 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ProductFormData {
   title: string;
   price: number;
   description: string;
-  image: File | null;
+  images: File[];
+  category?: string;
+}
+
+interface Category {
+  _id: string;
+  name: string;
+  slug: string;
 }
 
 export default function ProductForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  // Cargar categorías al montar el componente
+  useEffect(() => {
+    fetch('/api/categories')
+      .then(res => res.json())
+      .then(data => setCategories(data))
+      .catch(err => console.error('Error cargando categorías:', err));
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setSelectedFiles(Array.from(e.target.files));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -22,33 +45,36 @@ export default function ProductForm() {
     setMessage('');
 
     const formData = new FormData(e.currentTarget);
-    const file = formData.get('image') as File;
     const title = formData.get('title') as string;
     const price = parseFloat(formData.get('price') as string);
     const description = formData.get('description') as string;
+    const category = formData.get('category') as string;
 
     try {
-      // 1. Obtener firma (signed upload) del backend y subir la imagen firmada
-      let imageUrl = '';
-      let cloudinaryId = '';
+      // Validar que haya al menos una imagen
+      if (selectedFiles.length === 0) {
+        throw new Error('Debes seleccionar al menos una imagen');
+      }
 
-      if (file && file.size > 0) {
-        // Pedimos la firma al backend
+      // 1. Subir todas las imágenes a Cloudinary
+      const images = [];
+      
+      for (const file of selectedFiles) {
+        // Obtener firma para cada imagen
         const signRes = await fetch('/api/uploads', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ folder: 'products' }),
         });
         if (!signRes.ok) throw new Error('Error al obtener la firma de subida');
+        
         const signData = await signRes.json();
-        const { signature, timestamp, apiKey, cloudName } = signData as {
-          signature?: string;
-          timestamp?: number;
-          apiKey?: string;
-          cloudName?: string;
-        };
-        if (!signature || !timestamp || !apiKey || !cloudName) throw new Error('Respuesta de firma inválida');
+        const { signature, timestamp, apiKey, cloudName } = signData;
+        if (!signature || !timestamp || !apiKey || !cloudName) {
+          throw new Error('Respuesta de firma inválida');
+        }
 
+        // Subir imagen a Cloudinary
         const uploadData = new FormData();
         uploadData.append('file', file);
         uploadData.append('api_key', apiKey);
@@ -58,34 +84,43 @@ export default function ProductForm() {
           uploadData.append('folder', String(signData.folder));
         }
 
-        const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-          method: 'POST',
-          body: uploadData,
-        });
+        const uploadRes = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          { method: 'POST', body: uploadData }
+        );
+        
         if (!uploadRes.ok) {
           const txt = await uploadRes.text();
           throw new Error('Error subiendo a Cloudinary: ' + txt);
         }
+        
         const imageData = await uploadRes.json();
-        imageUrl = imageData.secure_url;
-        cloudinaryId = imageData.public_id;
+        images.push({
+          url: imageData.secure_url,
+          cloudinaryId: imageData.public_id,
+        });
       }
 
-      // 3. Crear producto en el backend
+      // 2. Crear producto en el backend
+      const productData: any = {
+        title,
+        price,
+        description,
+        images,
+        talles: formData.getAll('talles')?.map((v: any) => String(v)) || [],
+        colores: formData.getAll('colores')?.map((v: any) => String(v)) || [],
+        sexo: (formData.get('sexo') as string) || undefined,
+      };
+
+      // Agregar categoría si fue seleccionada
+      if (category && category !== '') {
+        productData.category = category;
+      }
+
       const productRes = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          title, 
-          price, 
-          description, 
-          imageUrl, 
-          cloudinaryId,
-          // campos extra de ropa
-          talles: formData.getAll('talles')?.map((v:any) => String(v)) || [],
-          colores: formData.getAll('colores')?.map((v:any) => String(v)) || [],
-          sexo: (formData.get('sexo') as string) || undefined,
-        }),
+        body: JSON.stringify(productData),
       });
 
       if (!productRes.ok) {
@@ -94,10 +129,11 @@ export default function ProductForm() {
       }
 
       const product = await productRes.json();
-      setMessage(`✅ Producto "${product.title}" creado exitosamente`);
+      setMessage(`✅ Producto "${product.title}" creado exitosamente con ${images.length} imagen(es)`);
       
       // Limpiar formulario
       (e.target as HTMLFormElement).reset();
+      setSelectedFiles([]);
       
     } catch (err) {
       console.error(err);
@@ -124,6 +160,27 @@ export default function ProductForm() {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Ej: Remera Explosion"
           />
+        </div>
+
+        <div>
+          <label htmlFor="category" className="block text-sm font-medium mb-1">
+            Categoría / Tipo
+          </label>
+          <select
+            id="category"
+            name="category"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Sin categoría</option>
+            {categories.map((cat) => (
+              <option key={cat._id} value={cat._id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Si no existe la categoría, créala primero en el administrador
+          </p>
         </div>
 
         <div>
@@ -156,19 +213,26 @@ export default function ProductForm() {
         </div>
 
         <div>
-          <label htmlFor="image" className="block text-sm font-medium mb-1">
-            Imagen
+          <label htmlFor="images" className="block text-sm font-medium mb-1">
+            Imágenes * (puedes seleccionar múltiples)
           </label>
           <input
             type="file"
-            id="image"
-            name="image"
+            id="images"
+            name="images"
             accept="image/*"
+            multiple
+            onChange={handleFileChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Formatos: JPG, PNG, WebP (max 10MB)
+            Formatos: JPG, PNG, WebP (max 10MB cada una)
           </p>
+          {selectedFiles.length > 0 && (
+            <p className="text-sm text-blue-600 mt-1">
+              {selectedFiles.length} imagen(es) seleccionada(s)
+            </p>
+          )}
         </div>
 
         <button
