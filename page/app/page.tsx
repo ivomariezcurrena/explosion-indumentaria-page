@@ -6,11 +6,23 @@ import { useState, useEffect } from "react";
 import { FiSearch, FiX } from "react-icons/fi";
 import { HiOutlineSparkles } from "react-icons/hi2";
 
+interface ProductImage {
+  url: string;
+  cloudinaryId: string;
+}
+
+interface Category {
+  _id: string;
+  name: string;
+  slug: string;
+}
+
 interface Product {
   _id: string;
   title: string;
   price: number;
-  imageUrl?: string;
+  images?: ProductImage[];
+  category?: Category;
   colores?: string[];
   sexo?: string;
   talles?: string[];
@@ -18,22 +30,17 @@ interface Product {
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("Todas");
   const [activeSex, setActiveSex] = useState("Todos");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const categories = [
-    "Todas",
-    "Remeras",
-    "Musculosas",
-    "Pantalones",
-    "Bermudas",
-  ];
   const sexOptions = ["Todos", "Hombre", "Mujer", "Unisex"];
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
 
   const fetchProducts = async () => {
@@ -50,9 +57,22 @@ export default function Home() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Error al cargar categorías");
+      const data = await res.json();
+      setCategories(data);
+    } catch (error) {
+      console.error("Error cargando categorías:", error);
+    }
+  };
+
   // Filtrar productos
   const filteredProducts = products.filter((product) => {
-    const matchesCategory = activeCategory === "Todas" || true;
+    const matchesCategory =
+      activeCategory === "Todas" ||
+      (product.category && product.category.name === activeCategory);
     const matchesSex = activeSex === "Todos" || product.sexo === activeSex;
     const matchesSearch =
       searchQuery === "" ||
@@ -191,18 +211,31 @@ export default function Home() {
 
           {/* Category Tabs */}
           <div className="flex gap-4 sm:gap-6 overflow-x-auto pb-1 scrollbar-hide">
+            <button
+              onClick={() => setActiveCategory("Todas")}
+              className={`py-2.5 sm:py-3 whitespace-nowrap transition-all relative text-xs sm:text-sm ${
+                activeCategory === "Todas"
+                  ? "text-red-600 font-semibold"
+                  : "text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              Todas
+              {activeCategory === "Todas" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-600 rounded-t-full"></span>
+              )}
+            </button>
             {categories.map((category) => (
               <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
+                key={category._id}
+                onClick={() => setActiveCategory(category.name)}
                 className={`py-2.5 sm:py-3 whitespace-nowrap transition-all relative text-xs sm:text-sm ${
-                  activeCategory === category
+                  activeCategory === category.name
                     ? "text-red-600 font-semibold"
                     : "text-gray-500 hover:text-gray-900"
                 }`}
               >
-                {category}
-                {activeCategory === category && (
+                {category.name}
+                {activeCategory === category.name && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-600 rounded-t-full"></span>
                 )}
               </button>
@@ -271,13 +304,22 @@ export default function Home() {
                     className="group cursor-pointer"
                   >
                     <div className="relative aspect-[3/4] bg-gray-100 mb-3 overflow-hidden rounded-lg">
-                      {isValidImageSrc(product.imageUrl) ? (
-                        <Image
-                          src={product.imageUrl as string}
-                          alt={product.title}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
+                      {product.images &&
+                      product.images.length > 0 &&
+                      isValidImageSrc(product.images[0].url) ? (
+                        <>
+                          <Image
+                            src={product.images[0].url}
+                            alt={product.title}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          {product.images.length > 1 && (
+                            <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                              +{product.images.length - 1}
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gray-200">
                           <span className="text-gray-400">Sin imagen</span>

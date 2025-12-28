@@ -19,42 +19,61 @@ import {
   MdOutlineCategory,
 } from "react-icons/md";
 
+interface ProductImage {
+  url: string;
+  cloudinaryId: string;
+}
+
+interface Category {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+}
+
 interface Product {
   _id: string;
   title: string;
   price: number;
   description?: string;
-  imageUrl?: string;
-  cloudinaryId?: string;
+  images?: ProductImage[];
+  category?: Category | string;
   colores?: string[];
   sexo?: string;
   talles?: string[];
 }
 
 export default function AdminPanel() {
-  const [view, setView] = useState<"list" | "form">("list");
+  const [view, setView] = useState<"list" | "form" | "categories">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryDescription, setNewCategoryDescription] = useState("");
 
   const [formData, setFormData] = useState({
     title: "",
     price: "",
     sexo: "Hombre",
     description: "",
+    category: "",
     talles: [] as string[],
     colores: [""],
   });
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [existingImages, setExistingImages] = useState<ProductImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const availableSizes = ["XS", "S", "M", "L", "XL", "XXL"];
+  const availableSizes = ["XS", "S", "M", "L", "XL", "XXL", "6", "7", "8"];
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
 
   const fetchProducts = async () => {
@@ -71,6 +90,66 @@ export default function AdminPanel() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      setLoadingCategories(true);
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Error al cargar categorías");
+      const data = await res.json();
+      setCategories(data);
+    } catch (error) {
+      console.error("Error cargando categorías:", error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
+      setMessage("❌ El nombre de la categoría es requerido");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCategoryName,
+          description: newCategoryDescription,
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Error al crear categoría");
+      }
+
+      setMessage(`✅ Categoría "${newCategoryName}" creada exitosamente`);
+      setNewCategoryName("");
+      setNewCategoryDescription("");
+      fetchCategories();
+      setTimeout(() => setMessage(""), 3000);
+    } catch (error: any) {
+      setMessage(`❌ Error: ${error.message}`);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string, name: string) => {
+    if (!confirm(`¿Eliminar categoría "${name}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/categories?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Error al eliminar");
+
+      setCategories(categories.filter((c) => c._id !== id));
+      setMessage(`✅ Categoría "${name}" eliminada exitosamente`);
+      setTimeout(() => setMessage(""), 3000);
+    } catch (error: any) {
+      setMessage(`❌ Error: ${error.message}`);
+    }
+  };
+
   const handleEdit = (product: Product) => {
     setEditingId(product._id);
     setFormData({
@@ -78,11 +157,17 @@ export default function AdminPanel() {
       price: String(product.price),
       sexo: product.sexo || "Hombre",
       description: product.description || "",
+      category:
+        typeof product.category === "object"
+          ? product.category._id
+          : product.category || "",
       talles: product.talles || [],
       colores:
         product.colores && product.colores.length > 0 ? product.colores : [""],
     });
-    setPreviewUrl(product.imageUrl || "");
+    setExistingImages(product.images || []);
+    setImageFiles([]);
+    setPreviewUrls([]);
     setView("form");
   };
 
@@ -108,11 +193,13 @@ export default function AdminPanel() {
       price: "",
       sexo: "Hombre",
       description: "",
+      category: "",
       talles: [],
       colores: [""],
     });
-    setImageFile(null);
-    setPreviewUrl("");
+    setImageFiles([]);
+    setPreviewUrls([]);
+    setExistingImages([]);
     setView("form");
   };
 
@@ -143,11 +230,23 @@ export default function AdminPanel() {
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files);
+      setImageFiles((prev) => [...prev, ...newFiles]);
+
+      const newPreviews = newFiles.map((file) => URL.createObjectURL(file));
+      setPreviewUrls((prev) => [...prev, ...newPreviews]);
     }
+  };
+
+  const removePreviewImage = (index: number) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingImage = (index: number) => {
+    setExistingImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -156,54 +255,67 @@ export default function AdminPanel() {
     setMessage("");
 
     try {
-      let imageUrl = previewUrl;
-      let cloudinaryId = "";
+      const allImages = [...existingImages];
 
-      // Subir imagen si hay un archivo nuevo
-      if (imageFile) {
-        const signRes = await fetch("/api/uploads", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ folder: "products" }),
-        });
-
-        if (!signRes.ok) throw new Error("Error obteniendo firma");
-
-        const signData = await signRes.json();
-        const { signature, timestamp, apiKey, cloudName } = signData;
-
-        const uploadData = new FormData();
-        uploadData.append("file", imageFile);
-        uploadData.append("api_key", apiKey);
-        uploadData.append("timestamp", String(timestamp));
-        uploadData.append("signature", signature);
-        if (signData.folder) uploadData.append("folder", signData.folder);
-
-        const uploadRes = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-          {
+      // Subir todas las nuevas imágenes
+      if (imageFiles.length > 0) {
+        for (const file of imageFiles) {
+          // Obtener firma para cada imagen
+          const signRes = await fetch("/api/uploads", {
             method: "POST",
-            body: uploadData,
-          }
-        );
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ folder: "products" }),
+          });
 
-        if (!uploadRes.ok) throw new Error("Error subiendo imagen");
+          if (!signRes.ok) throw new Error("Error obteniendo firma");
 
-        const imageData = await uploadRes.json();
-        imageUrl = imageData.secure_url;
-        cloudinaryId = imageData.public_id;
+          const signData = await signRes.json();
+          const { signature, timestamp, apiKey, cloudName } = signData;
+
+          const uploadData = new FormData();
+          uploadData.append("file", file);
+          uploadData.append("api_key", apiKey);
+          uploadData.append("timestamp", String(timestamp));
+          uploadData.append("signature", signature);
+          if (signData.folder) uploadData.append("folder", signData.folder);
+
+          const uploadRes = await fetch(
+            `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+            {
+              method: "POST",
+              body: uploadData,
+            }
+          );
+
+          if (!uploadRes.ok) throw new Error("Error subiendo imagen");
+
+          const imageData = await uploadRes.json();
+          allImages.push({
+            url: imageData.secure_url,
+            cloudinaryId: imageData.public_id,
+          });
+        }
       }
 
-      const productData = {
+      // Validar que haya al menos una imagen
+      if (allImages.length === 0) {
+        throw new Error("Debes agregar al menos una imagen");
+      }
+
+      const productData: any = {
         title: formData.title,
         price: parseFloat(formData.price),
         description: formData.description,
-        imageUrl,
-        cloudinaryId: cloudinaryId || undefined,
+        images: allImages,
         talles: formData.talles,
         colores: formData.colores.filter((c) => c.trim() !== ""),
         sexo: formData.sexo,
       };
+
+      // Agregar categoría si fue seleccionada
+      if (formData.category) {
+        productData.category = formData.category;
+      }
 
       // Editar o crear
       const url = editingId ? "/api/products" : "/api/products";
@@ -225,7 +337,7 @@ export default function AdminPanel() {
       setMessage(
         `✅ Producto "${product.title}" ${
           editingId ? "actualizado" : "creado"
-        } exitosamente`
+        } exitosamente con ${allImages.length} imagen(es)`
       );
 
       // Limpiar formulario y volver a lista
@@ -234,11 +346,13 @@ export default function AdminPanel() {
         price: "",
         sexo: "Hombre",
         description: "",
+        category: "",
         talles: [],
         colores: [""],
       });
-      setImageFile(null);
-      setPreviewUrl("");
+      setImageFiles([]);
+      setPreviewUrls([]);
+      setExistingImages([]);
       setEditingId(null);
 
       // Recargar productos y volver a la lista
@@ -311,6 +425,17 @@ export default function AdminPanel() {
             <FiPlus className="inline mr-2" />
             {editingId ? "Editar Producto" : "Nuevo Producto"}
           </button>
+          <button
+            onClick={() => setView("categories")}
+            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+              view === "categories"
+                ? "bg-red-600 text-white shadow-lg"
+                : "bg-white text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            <MdOutlineCategory className="inline mr-2" />
+            Categorías
+          </button>
         </div>
 
         {message && (
@@ -371,13 +496,22 @@ export default function AdminPanel() {
                   >
                     {/* Product Image */}
                     <div className="relative aspect-[3/4] bg-gray-100">
-                      {isValidImageSrc(product.imageUrl) ? (
-                        <Image
-                          src={product.imageUrl as string}
-                          alt={product.title}
-                          fill
-                          className="object-cover"
-                        />
+                      {product.images &&
+                      product.images.length > 0 &&
+                      isValidImageSrc(product.images[0].url) ? (
+                        <>
+                          <Image
+                            src={product.images[0].url}
+                            alt={product.title}
+                            fill
+                            className="object-cover"
+                          />
+                          {product.images.length > 1 && (
+                            <div className="absolute top-3 left-3 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                              +{product.images.length - 1}
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <span className="text-gray-400">Sin imagen</span>
@@ -537,6 +671,37 @@ export default function AdminPanel() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all resize-none"
                       />
                     </div>
+
+                    {/* Category */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Categoría
+                      </label>
+                      <select
+                        value={formData.category}
+                        onChange={(e) =>
+                          setFormData({ ...formData, category: e.target.value })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all"
+                      >
+                        <option value="">Sin categoría</option>
+                        {categories.map((cat) => (
+                          <option key={cat._id} value={cat._id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Si no ves tu categoría,{" "}
+                        <button
+                          type="button"
+                          onClick={() => setView("categories")}
+                          className="text-red-600 hover:text-red-700 underline"
+                        >
+                          créala aquí
+                        </button>
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -610,50 +775,92 @@ export default function AdminPanel() {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-6 flex items-center gap-2">
                     <FiUpload className="text-red-600 text-2xl" />
-                    Imagen del Producto
+                    Imágenes del Producto
                   </h3>
 
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-red-600 transition-colors">
+                  {/* Imágenes existentes (al editar) */}
+                  {existingImages.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-600 mb-3">
+                        Imágenes actuales:
+                      </p>
+                      <div className="grid grid-cols-3 gap-3">
+                        {existingImages.map((img, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={img.url}
+                              alt={`Imagen ${index + 1}`}
+                              className="w-full h-24 object-cover rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeExistingImage(index)}
+                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <FiX size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nuevas imágenes (preview) */}
+                  {previewUrls.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-600 mb-3">
+                        Nuevas imágenes:
+                      </p>
+                      <div className="grid grid-cols-3 gap-3">
+                        {previewUrls.map((url, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={url}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-24 object-cover rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removePreviewImage(index)}
+                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <FiX size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botón para agregar más imágenes */}
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-red-600 transition-colors">
                     <input
                       type="file"
                       accept="image/*"
+                      multiple
                       onChange={handleImageChange}
                       className="hidden"
                       id="image-upload"
                     />
                     <label htmlFor="image-upload" className="cursor-pointer">
-                      {previewUrl ? (
-                        <div className="relative">
-                          <img
-                            src={previewUrl}
-                            alt="Preview"
-                            className="max-h-64 mx-auto rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setImageFile(null);
-                              setPreviewUrl("");
-                            }}
-                            className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full hover:bg-red-700"
-                          >
-                            <FiX />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <FiUpload className="text-5xl text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600 mb-2">
-                            Haz clic para seleccionar una imagen
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            Soporta: JPG, PNG, WEBP, AVIF (máx. 5MB)
-                          </p>
-                        </>
-                      )}
+                      <FiUpload className="text-4xl text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600 mb-1">
+                        {existingImages.length + previewUrls.length === 0
+                          ? "Selecciona imágenes del producto *"
+                          : "Agregar más imágenes"}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        Soporta: JPG, PNG, WEBP, AVIF (múltiples archivos)
+                      </p>
                     </label>
                   </div>
+
+                  {existingImages.length + previewUrls.length > 0 && (
+                    <p className="mt-3 text-sm text-gray-600">
+                      Total: {existingImages.length + previewUrls.length}{" "}
+                      imagen(es)
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -669,14 +876,26 @@ export default function AdminPanel() {
                   <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                     {/* Preview Product Image */}
                     <div className="relative aspect-[3/4] bg-gray-200 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                      {previewUrl ? (
+                      {previewUrls.length > 0 ? (
                         <img
-                          src={previewUrl}
+                          src={previewUrls[0]}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : existingImages.length > 0 ? (
+                        <img
+                          src={existingImages[0].url}
                           alt="Preview"
                           className="w-full h-full object-cover"
                         />
                       ) : (
                         <FiUpload className="text-4xl text-gray-400" />
+                      )}
+                      {previewUrls.length + existingImages.length > 1 && (
+                        <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                          +{previewUrls.length + existingImages.length - 1}{" "}
+                          fotos
+                        </div>
                       )}
                     </div>
 
@@ -731,6 +950,108 @@ export default function AdminPanel() {
               </div>
             </div>
           </form>
+        )}
+
+        {/* Vista de Categorías */}
+        {view === "categories" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-3xl font-light text-gray-900 mb-2">
+                Gestionar Categorías
+              </h2>
+              <p className="text-gray-600">
+                Crea y administra las categorías de productos
+              </p>
+            </div>
+
+            {/* Formulario para crear categoría */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Nueva Categoría
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre *
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Ej: Remeras, Pantalones, Zapatillas..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Descripción (opcional)
+                  </label>
+                  <textarea
+                    value={newCategoryDescription}
+                    onChange={(e) => setNewCategoryDescription(e.target.value)}
+                    placeholder="Descripción de la categoría..."
+                    rows={2}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent resize-none"
+                  />
+                </div>
+                <button
+                  onClick={handleCreateCategory}
+                  className="px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center gap-2"
+                >
+                  <FiPlus />
+                  Crear Categoría
+                </button>
+              </div>
+            </div>
+
+            {/* Lista de categorías */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Categorías Existentes ({categories.length})
+              </h3>
+              {loadingCategories ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                  <p className="text-gray-600 mt-2">Cargando...</p>
+                </div>
+              ) : categories.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">
+                  No hay categorías todavía. Crea la primera!
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {categories.map((category) => (
+                    <div
+                      key={category._id}
+                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-medium text-gray-900">
+                          {category.name}
+                        </h4>
+                        <button
+                          onClick={() =>
+                            handleDeleteCategory(category._id, category.name)
+                          }
+                          className="text-red-600 hover:text-red-700 p-1"
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </div>
+                      {category.description && (
+                        <p className="text-sm text-gray-500">
+                          {category.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-2">
+                        Slug: {category.slug}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

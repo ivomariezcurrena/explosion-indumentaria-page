@@ -6,12 +6,17 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { HiOutlineSparkles } from "react-icons/hi2";
 
+interface ProductImage {
+  url: string;
+  cloudinaryId: string;
+}
+
 interface Product {
   _id: string;
   title: string;
   price: number;
   description?: string;
-  imageUrl?: string;
+  images?: ProductImage[];
   colores?: string[];
   sexo?: string;
   talles?: string[];
@@ -41,6 +46,7 @@ export default function ProductDetail() {
       const found = data.find((p: Product) => p._id === productId);
       if (!found) throw new Error("Producto no encontrado");
       setProduct(found);
+      setSelectedImage(0); // Resetear a la primera imagen
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -109,13 +115,17 @@ export default function ProductDetail() {
             <div>
               {/* Main Image */}
               <div className="relative aspect-[3/4] bg-gray-100 mb-4 overflow-hidden rounded-lg">
-                {isValidImageSrc(product.imageUrl) ? (
+                {product.images &&
+                product.images.length > 0 &&
+                product.images[selectedImage] &&
+                isValidImageSrc(product.images[selectedImage].url) ? (
                   <Image
-                    src={product.imageUrl as string}
+                    src={product.images[selectedImage].url}
                     alt={product.title}
                     fill
                     className="object-cover"
                     priority
+                    sizes="(max-width: 768px) 100vw, 50vw"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-gray-200">
@@ -124,20 +134,30 @@ export default function ProductDetail() {
                 )}
               </div>
 
-              {/* Thumbnails - mostrar solo si hay imagen */}
-              {isValidImageSrc(product.imageUrl) && (
-                <div className="grid grid-cols-3 gap-4">
-                  <button
-                    onClick={() => setSelectedImage(0)}
-                    className="relative aspect-[3/4] bg-gray-100 overflow-hidden rounded-lg ring-2 ring-red-600"
-                  >
-                    <Image
-                      src={product.imageUrl as string}
-                      alt={product.title}
-                      fill
-                      className="object-cover"
-                    />
-                  </button>
+              {/* Thumbnails - mostrar solo si hay múltiples imágenes */}
+              {product.images && product.images.length > 1 && (
+                <div className="grid grid-cols-4 gap-3">
+                  {product.images.map((img, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedImage(index)}
+                      className={`relative aspect-[3/4] bg-gray-100 overflow-hidden rounded-lg transition-all ${
+                        selectedImage === index
+                          ? "ring-2 ring-red-600"
+                          : "hover:ring-2 hover:ring-gray-300"
+                      }`}
+                    >
+                      {isValidImageSrc(img.url) && (
+                        <Image
+                          src={img.url}
+                          alt={`${product.title} - ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 768px) 25vw, 12vw"
+                        />
+                      )}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
