@@ -101,6 +101,13 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 md:px-6 md:py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 md:gap-4">
+          <Image
+            src="/logo.svg"
+            alt="La Explosión Indumentaria"
+            width={48}
+            height={48}
+            priority
+          />
           <h1 className="text-base sm:text-xl md:text-2xl font-light tracking-[0.2em] md:tracking-[0.3em] uppercase text-gray-900 text-center">
             La Explosión Indumentaria
           </h1>
@@ -118,7 +125,6 @@ export default function Home() {
         <div className="relative z-10 max-w-6xl mx-auto">
           {/* Badge superior */}
           <div className="inline-flex items-center gap-2 bg-red-600/20 backdrop-blur-md border border-red-600/30 rounded-full px-4 py-2 sm:px-6 sm:py-3 mb-6 sm:mb-8">
-            <HiOutlineSparkles className="text-xl sm:text-2xl text-red-500 animate-pulse" />
             <span className="text-xs sm:text-sm font-semibold tracking-[0.15em] sm:tracking-[0.25em] uppercase text-red-500">
               Nueva Colección
             </span>

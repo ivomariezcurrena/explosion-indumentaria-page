@@ -73,7 +73,13 @@ export default function ProductDetail() {
             href="/"
             className="flex items-center gap-4 hover:opacity-80 transition-opacity"
           >
-            <HiOutlineSparkles className="text-3xl text-red-600" />
+            <Image
+              src="/logo.svg"
+              alt="La Explosión Indumentaria"
+              width={48}
+              height={48}
+              priority
+            />
             <h1 className="text-xl font-light tracking-[0.3em] uppercase text-gray-900">
               La Explosión Indumentaria
             </h1>

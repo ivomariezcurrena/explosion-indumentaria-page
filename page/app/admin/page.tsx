@@ -381,7 +381,13 @@ export default function AdminPanel() {
       <header className="bg-white border-b border-gray-200 px-6 py-6 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <HiOutlineSparkles className="text-4xl text-red-600" />
+            <Image
+              src="/logo.svg"
+              alt="La Explosión Indumentaria"
+              width={48}
+              height={48}
+              priority
+            />
             <div>
               <h1 className="text-xl font-light tracking-[0.2em] uppercase text-gray-900">
                 Panel de Administración
